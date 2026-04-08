@@ -35,12 +35,12 @@ impl<T: Fn(&mut Formatter) -> fmt::Result> Display for FmtFnWrapper<T> {
     }
 }
 
-pub fn width_of<'a, T>(d: &'a T) -> Result<usize, fmt::Error>
+pub fn width_of<'a, T>(d: &'a T) -> usize
 where
     T: ?Sized,
     &'a T: Display,
 {
     let mut width_counter = WidthCounter::new();
-    write!(width_counter, "{}", d)?;
-    Ok(width_counter.get())
+    write!(width_counter, "{}", d).unwrap();
+    width_counter.get()
 }

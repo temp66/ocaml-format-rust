@@ -40,29 +40,29 @@
 //! }
 //!
 //! impl Lambda {
-//!     fn to_doc(&self) -> Result<Doc<'_>, fmt::Error> {
-//!         Ok(match self {
-//!             Lambda::Var(ident) => doc().atom(Ident(ident))?,
+//!     fn to_doc(&self) -> Doc<'_> {
+//!         match self {
+//!             Lambda::Var(ident) => doc().atom(Ident(ident)),
 //!             Lambda::Abs(param, body) => doc().format_box(
 //!                 sbox(1)
-//!                     .atom_fn(|f| write!(f, "({}{}{}", Keyword("λ"), Ident(param), Keyword(".")))?
+//!                     .atom_fn(|f| write!(f, "({}{}{}", Keyword("λ"), Ident(param), Keyword(".")))
 //!                     .space()
-//!                     .extend(body.to_doc()?)
-//!                     .atom(")")?,
+//!                     .extend(body.to_doc())
+//!                     .atom(")"),
 //!             ),
 //!             Lambda::App(left, right) => doc().format_box(
 //!                 sbox(1)
-//!                     .atom("(")?
-//!                     .extend(left.to_doc()?)
+//!                     .atom("(")
+//!                     .extend(left.to_doc())
 //!                     .space()
-//!                     .extend(right.to_doc()?)
-//!                     .atom(")")?,
+//!                     .extend(right.to_doc())
+//!                     .atom(")"),
 //!             ),
-//!         })
+//!         }
 //!     }
 //! }
 //!
-//! fn main() -> fmt::Result {
+//! fn main() {
 //!     let x: Box<str> = "x".into();
 //!     let expr = Lambda::Abs(
 //!         x.clone(),
@@ -72,7 +72,7 @@
 //!         )),
 //!     );
 //!
-//!     let doc = expr.to_doc()?;
+//!     let doc = expr.to_doc();
 //!     assert_eq!(
 //!         format!("{}", doc.display(&FormattingOptions::new().set_width(10))),
 //!         "\
@@ -80,7 +80,6 @@
 //!  ((λx. x)
 //!   x))",
 //!     );
-//!     Ok(())
 //! }
 //! ```
 
@@ -298,15 +297,12 @@ impl<'a> Doc<'a> {
     /// The content should not contain newlines.
     ///
     /// The formatting closure is called multiple times, to get the width of the content.
-    pub fn atom_fn(
-        self,
-        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + 'a,
-    ) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
-        Ok(self.atom_inner(Atom {
+    pub fn atom_fn(self, fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + 'a) -> Self {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
+        self.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,
-        }))
+        })
     }
 
     /// Appends indivisible content to the document, from a value implementing [`Display`].
@@ -314,12 +310,12 @@ impl<'a> Doc<'a> {
     /// The content should not contain newlines.
     ///
     /// The value is formatted multiple times, to get the width of the content.
-    pub fn atom(self, d: impl Display + 'a) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&d)?;
-        Ok(self.atom_inner(Atom {
+    pub fn atom(self, d: impl Display + 'a) -> Self {
+        let width = fmt_width::width_of(&d);
+        self.atom_inner(Atom {
             fmt_fn: Box::new(move |f| write!(f, "{}", d)),
             width,
-        }))
+        })
     }
 }
 
@@ -335,15 +331,12 @@ impl<'a> DocSend<'a> {
     /// The content should not contain newlines.
     ///
     /// The formatting closure is called multiple times, to get the width of the content.
-    pub fn atom_fn(
-        self,
-        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + 'a,
-    ) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
-        Ok(self.atom_inner(Atom {
+    pub fn atom_fn(self, fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + 'a) -> Self {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
+        self.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,
-        }))
+        })
     }
 
     /// Appends indivisible content to the document, from a value implementing [`Display`].
@@ -351,12 +344,12 @@ impl<'a> DocSend<'a> {
     /// The content should not contain newlines.
     ///
     /// The value is formatted multiple times, to get the width of the content.
-    pub fn atom(self, d: impl Display + Send + 'a) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&d)?;
-        Ok(self.atom_inner(Atom {
+    pub fn atom(self, d: impl Display + Send + 'a) -> Self {
+        let width = fmt_width::width_of(&d);
+        self.atom_inner(Atom {
             fmt_fn: Box::new(move |f| write!(f, "{}", d)),
             width,
-        }))
+        })
     }
 }
 
@@ -372,15 +365,12 @@ impl<'a> DocSync<'a> {
     /// The content should not contain newlines.
     ///
     /// The formatting closure is called multiple times, to get the width of the content.
-    pub fn atom_fn(
-        self,
-        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Sync + 'a,
-    ) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
-        Ok(self.atom_inner(Atom {
+    pub fn atom_fn(self, fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Sync + 'a) -> Self {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
+        self.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,
-        }))
+        })
     }
 
     /// Appends indivisible content to the document, from a value implementing [`Display`].
@@ -388,12 +378,12 @@ impl<'a> DocSync<'a> {
     /// The content should not contain newlines.
     ///
     /// The value is formatted multiple times, to get the width of the content.
-    pub fn atom(self, d: impl Display + Sync + 'a) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&d)?;
-        Ok(self.atom_inner(Atom {
+    pub fn atom(self, d: impl Display + Sync + 'a) -> Self {
+        let width = fmt_width::width_of(&d);
+        self.atom_inner(Atom {
             fmt_fn: Box::new(move |f| write!(f, "{}", d)),
             width,
-        }))
+        })
     }
 }
 
@@ -412,12 +402,12 @@ impl<'a> DocSendSync<'a> {
     pub fn atom_fn(
         self,
         fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + Sync + 'a,
-    ) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
-        Ok(self.atom_inner(Atom {
+    ) -> Self {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
+        self.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,
-        }))
+        })
     }
 
     /// Appends indivisible content to the document, from a value implementing [`Display`].
@@ -425,12 +415,12 @@ impl<'a> DocSendSync<'a> {
     /// The content should not contain newlines.
     ///
     /// The value is formatted multiple times, to get the width of the content.
-    pub fn atom(self, d: impl Display + Send + Sync + 'a) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&d)?;
-        Ok(self.atom_inner(Atom {
+    pub fn atom(self, d: impl Display + Send + Sync + 'a) -> Self {
+        let width = fmt_width::width_of(&d);
+        self.atom_inner(Atom {
             fmt_fn: Box::new(move |f| write!(f, "{}", d)),
             width,
-        }))
+        })
     }
 }
 
@@ -506,17 +496,14 @@ impl<'a> FormatBox<'a> {
     /// The content should not contain newlines.
     ///
     /// The formatting closure is called multiple times, to get the width of the content.
-    pub fn atom_fn(
-        mut self,
-        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + 'a,
-    ) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
+    pub fn atom_fn(mut self, fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + 'a) -> Self {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
         self.flat_width += width;
         self.doc = self.doc.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,
         });
-        Ok(self)
+        self
     }
 
     /// Appends indivisible content to the box, from a value implementing [`Display`].
@@ -524,14 +511,14 @@ impl<'a> FormatBox<'a> {
     /// The content should not contain newlines.
     ///
     /// The value is formatted multiple times, to get the width of the content.
-    pub fn atom(mut self, d: impl Display + 'a) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&d)?;
+    pub fn atom(mut self, d: impl Display + 'a) -> Self {
+        let width = fmt_width::width_of(&d);
         self.flat_width += width;
         self.doc = self.doc.atom_inner(Atom {
             fmt_fn: Box::new(move |f| write!(f, "{}", d)),
             width,
         });
-        Ok(self)
+        self
     }
 }
 
@@ -567,17 +554,14 @@ impl<'a> FormatBoxSend<'a> {
     /// The content should not contain newlines.
     ///
     /// The formatting closure is called multiple times, to get the width of the content.
-    pub fn atom_fn(
-        mut self,
-        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + 'a,
-    ) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
+    pub fn atom_fn(mut self, fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + 'a) -> Self {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
         self.flat_width += width;
         self.doc = self.doc.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,
         });
-        Ok(self)
+        self
     }
 
     /// Appends indivisible content to the box, from a value implementing [`Display`].
@@ -585,14 +569,14 @@ impl<'a> FormatBoxSend<'a> {
     /// The content should not contain newlines.
     ///
     /// The value is formatted multiple times, to get the width of the content.
-    pub fn atom(mut self, d: impl Display + Send + 'a) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&d)?;
+    pub fn atom(mut self, d: impl Display + Send + 'a) -> Self {
+        let width = fmt_width::width_of(&d);
         self.flat_width += width;
         self.doc = self.doc.atom_inner(Atom {
             fmt_fn: Box::new(move |f| write!(f, "{}", d)),
             width,
         });
-        Ok(self)
+        self
     }
 }
 
@@ -628,17 +612,14 @@ impl<'a> FormatBoxSync<'a> {
     /// The content should not contain newlines.
     ///
     /// The formatting closure is called multiple times, to get the width of the content.
-    pub fn atom_fn(
-        mut self,
-        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Sync + 'a,
-    ) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
+    pub fn atom_fn(mut self, fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Sync + 'a) -> Self {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
         self.flat_width += width;
         self.doc = self.doc.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,
         });
-        Ok(self)
+        self
     }
 
     /// Appends indivisible content to the box, from a value implementing [`Display`].
@@ -646,14 +627,14 @@ impl<'a> FormatBoxSync<'a> {
     /// The content should not contain newlines.
     ///
     /// The value is formatted multiple times, to get the width of the content.
-    pub fn atom(mut self, d: impl Display + Sync + 'a) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&d)?;
+    pub fn atom(mut self, d: impl Display + Sync + 'a) -> Self {
+        let width = fmt_width::width_of(&d);
         self.flat_width += width;
         self.doc = self.doc.atom_inner(Atom {
             fmt_fn: Box::new(move |f| write!(f, "{}", d)),
             width,
         });
-        Ok(self)
+        self
     }
 }
 
@@ -692,14 +673,14 @@ impl<'a> FormatBoxSendSync<'a> {
     pub fn atom_fn(
         mut self,
         fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + Sync + 'a,
-    ) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
+    ) -> Self {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
         self.flat_width += width;
         self.doc = self.doc.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,
         });
-        Ok(self)
+        self
     }
 
     /// Appends indivisible content to the box, from a value implementing [`Display`].
@@ -707,14 +688,14 @@ impl<'a> FormatBoxSendSync<'a> {
     /// The content should not contain newlines.
     ///
     /// The value is formatted multiple times, to get the width of the content.
-    pub fn atom(mut self, d: impl Display + Send + Sync + 'a) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&d)?;
+    pub fn atom(mut self, d: impl Display + Send + Sync + 'a) -> Self {
+        let width = fmt_width::width_of(&d);
         self.flat_width += width;
         self.doc = self.doc.atom_inner(Atom {
             fmt_fn: Box::new(move |f| write!(f, "{}", d)),
             width,
         });
-        Ok(self)
+        self
     }
 }
 
@@ -891,14 +872,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_hbox() -> fmt::Result {
+    fn test_hbox() {
         let doc = doc().format_box(
             hbox()
-                .atom_fn(|f| write!(f, "--"))?
+                .atom_fn(|f| write!(f, "--"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "--"))?
+                .atom_fn(|f| write!(f, "--"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "--"))?,
+                .atom_fn(|f| write!(f, "--")),
         );
         assert_eq!(
             format!(
@@ -910,18 +891,17 @@ mod tests {
             ),
             "-- -- --",
         );
-        Ok(())
     }
 
     #[test]
-    fn test_vbox() -> fmt::Result {
+    fn test_vbox() {
         let doc = doc().format_box(
             vbox(1)
-                .atom_fn(|f| write!(f, "--"))?
+                .atom_fn(|f| write!(f, "--"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "--"))?
+                .atom_fn(|f| write!(f, "--"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "--"))?,
+                .atom_fn(|f| write!(f, "--")),
         );
         assert_eq!(
             format!(
@@ -936,18 +916,17 @@ mod tests {
  --
  --",
         );
-        Ok(())
     }
 
     #[test]
-    fn test_hvbox_h() -> fmt::Result {
+    fn test_hvbox_h() {
         let doc = doc().format_box(
             hvbox(1)
-                .atom_fn(|f| write!(f, "--"))?
+                .atom_fn(|f| write!(f, "--"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "--"))?
+                .atom_fn(|f| write!(f, "--"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "--"))?,
+                .atom_fn(|f| write!(f, "--")),
         );
         assert_eq!(
             format!(
@@ -959,18 +938,17 @@ mod tests {
             ),
             "-- -- --",
         );
-        Ok(())
     }
 
     #[test]
-    fn test_hvbox_v() -> fmt::Result {
+    fn test_hvbox_v() {
         let doc = doc().format_box(
             hvbox(1)
-                .atom_fn(|f| write!(f, "---"))?
+                .atom_fn(|f| write!(f, "---"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "---"))?
+                .atom_fn(|f| write!(f, "---"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "---"))?,
+                .atom_fn(|f| write!(f, "---")),
         );
         assert_eq!(
             format!(
@@ -985,18 +963,17 @@ mod tests {
  ---
  ---",
         );
-        Ok(())
     }
 
     #[test]
-    fn test_hovbox_0() -> fmt::Result {
+    fn test_hovbox_0() {
         let doc = doc().format_box(
             hovbox(2)
-                .atom_fn(|f| write!(f, "---"))?
+                .atom_fn(|f| write!(f, "---"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "---"))?
+                .atom_fn(|f| write!(f, "---"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "---"))?,
+                .atom_fn(|f| write!(f, "---")),
         );
         assert_eq!(
             format!(
@@ -1010,18 +987,17 @@ mod tests {
 --- ---
   ---",
         );
-        Ok(())
     }
 
     #[test]
-    fn test_hovbox_1() -> fmt::Result {
+    fn test_hovbox_1() {
         let doc = doc().format_box(
             hovbox(2)
-                .atom_fn(|f| write!(f, "---"))?
+                .atom_fn(|f| write!(f, "---"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "---"))?
+                .atom_fn(|f| write!(f, "---"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "---"))?,
+                .atom_fn(|f| write!(f, "---")),
         );
         assert_eq!(
             format!(
@@ -1036,20 +1012,19 @@ mod tests {
   ---
   ---",
         );
-        Ok(())
     }
 
     #[test]
-    fn test_open_indent() -> fmt::Result {
-        let doc = doc().atom_fn(|f| write!(f, "---["))?.format_box(
+    fn test_open_indent() {
+        let doc = doc().atom_fn(|f| write!(f, "---[")).format_box(
             hovbox(2)
-                .atom_fn(|f| write!(f, "--"))?
+                .atom_fn(|f| write!(f, "--"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "--"))?
+                .atom_fn(|f| write!(f, "--"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "--"))?
+                .atom_fn(|f| write!(f, "--"))
                 .format_break(1, 0)
-                .atom_fn(|f| write!(f, "--"))?,
+                .atom_fn(|f| write!(f, "--")),
         );
         assert_eq!(
             format!(
@@ -1063,20 +1038,19 @@ mod tests {
 ---[-- --
       -- --",
         );
-        Ok(())
     }
 
     #[test]
-    fn test_break_hint() -> fmt::Result {
-        let doc = doc().atom_fn(|f| write!(f, "---"))?.format_box(
+    fn test_break_hint() {
+        let doc = doc().atom_fn(|f| write!(f, "---")).format_box(
             hovbox(1)
-                .atom_fn(|f| write!(f, "[--"))?
+                .atom_fn(|f| write!(f, "[--"))
                 .format_break(1, 2)
-                .atom_fn(|f| write!(f, "--"))?
+                .atom_fn(|f| write!(f, "--"))
                 .format_break(1, 2)
-                .atom_fn(|f| write!(f, "--"))?
+                .atom_fn(|f| write!(f, "--"))
                 .format_break(1, 2)
-                .atom_fn(|f| write!(f, "--"))?,
+                .atom_fn(|f| write!(f, "--")),
         );
         assert_eq!(
             format!(
@@ -1091,30 +1065,29 @@ mod tests {
       --
       --",
         );
-        Ok(())
     }
 
     #[test]
-    fn test_cbox() -> fmt::Result {
+    fn test_cbox() {
         let doc = doc().format_box(
             sbox(0)
-                .atom_fn(|f| write!(f, "(---"))?
+                .atom_fn(|f| write!(f, "(---"))
                 .format_break(0, 1)
                 .format_box(
                     sbox(0)
-                        .atom_fn(|f| write!(f, "(----"))?
+                        .atom_fn(|f| write!(f, "(----"))
                         .format_break(0, 1)
                         .format_box(
                             sbox(0)
-                                .atom_fn(|f| write!(f, "(---"))?
+                                .atom_fn(|f| write!(f, "(---"))
                                 .format_break(0, 0)
-                                .atom_fn(|f| write!(f, ")"))?,
+                                .atom_fn(|f| write!(f, ")")),
                         )
                         .format_break(0, 0)
-                        .atom_fn(|f| write!(f, ")"))?,
+                        .atom_fn(|f| write!(f, ")")),
                 )
                 .format_break(0, 0)
-                .atom_fn(|f| write!(f, ")"))?,
+                .atom_fn(|f| write!(f, ")")),
         );
         assert_eq!(
             format!(
@@ -1131,12 +1104,11 @@ mod tests {
  )
 )",
         );
-        Ok(())
     }
 
     #[test]
-    fn test_atom() -> fmt::Result {
-        let doc = doc().atom(42)?;
+    fn test_atom() {
+        let doc = doc().atom(42);
         assert_eq!(
             format!(
                 "{}",
@@ -1147,17 +1119,16 @@ mod tests {
             ),
             "42",
         );
-        Ok(())
     }
 
     #[test]
-    fn test_max_indent() -> fmt::Result {
+    fn test_max_indent() {
         let doc = doc().format_box(
-            vbox(2).atom("v")?.cut().format_box(
-                vbox(2).atom("v")?.cut().format_box(
+            vbox(2).atom("v").cut().format_box(
+                vbox(2).atom("v").cut().format_box(
                     sbox(1)
-                        .atom("c1")?
-                        .format_box(sbox(0).atom("c0")?.format_break(10, 2).atom("bla")?),
+                        .atom("c1")
+                        .format_box(sbox(0).atom("c0").format_break(10, 2).atom("bla")),
                 ),
             ),
         );
@@ -1176,6 +1147,5 @@ v
      c0
      bla",
         );
-        Ok(())
     }
 }
