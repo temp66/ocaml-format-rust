@@ -8,6 +8,8 @@
 //!
 //! * The OCaml implementation treats the number of Unicode scalar values as the text width, whereas this port uses the [`unicode_width`](https://crates.io/crates/unicode-width) crate to get a more accurate measurement.
 //!
+//! * The OCaml implementation does not allow setting `max_indent` to less than or equal to 1, whereas this port does not impose this restriction.
+//!
 //! # Examples
 //!
 //! ```
@@ -72,13 +74,7 @@
 //!
 //!     let doc = expr.to_doc()?;
 //!     assert_eq!(
-//!         format!(
-//!             "{}",
-//!             doc.display(&FormattingOptions {
-//!                 width: 10,
-//!                 max_indent: 10,
-//!             }),
-//!         ),
+//!         format!("{}", doc.display(&FormattingOptions::new().set_width(10))),
 //!         "\
 //! (λx.
 //!  ((λx. x)
@@ -100,12 +96,39 @@ mod fmt_width;
 
 #[derive(Clone, Debug)]
 pub struct FormattingOptions {
+    width: usize,
+    max_indent: usize,
+}
+
+impl FormattingOptions {
+    /// Creates a `FormattingOptions` with default values.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Reflects the `margin` in the OCaml implementation.
     ///
-    /// Desired line width limit.
-    pub width: usize,
+    /// Sets line width limit.
+    pub fn set_width(mut self, width: usize) -> Self {
+        if width == 0 {
+            return self;
+        }
+
+        if self.max_indent > width {
+            self.max_indent = (self.max_indent + width)
+                .saturating_sub(self.width)
+                .max(width / 2)
+                .max(1);
+        }
+        self.width = width;
+        self
+    }
+
     /// Reflects the `max_indent` in the OCaml implementation.
-    pub max_indent: usize,
+    pub fn set_max_indent(mut self, max_indent: usize) -> Self {
+        self.max_indent = max_indent;
+        self
+    }
 }
 
 /// Aligns with the defaults of the OCaml implementation.
@@ -866,8 +889,6 @@ impl<'a, 'b> Engine<'a, 'b> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    use fmt::Write as _;
 
     #[test]
     fn test_hbox() -> fmt::Result {
