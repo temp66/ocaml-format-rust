@@ -85,7 +85,7 @@
 //!         "\
 //! (λx.
 //!  ((λx. x)
-//!   x))"
+//!   x))",
 //!     );
 //!     Ok(())
 //! }
@@ -93,8 +93,12 @@
 
 use fmt_width::FmtFnWrapper;
 
-use std::fmt::{self, Display, Formatter};
+use std::{
+    fmt::{self, Display, Formatter},
+    marker::PhantomData,
+};
 
+mod convert;
 mod fmt_width;
 
 #[derive(Clone, Debug)]
@@ -119,26 +123,53 @@ impl Default for FormattingOptions {
     }
 }
 
+type FmtFn<'a> = dyn Fn(&mut Formatter) -> fmt::Result + 'a;
+
+type FmtFnSend<'a> = dyn Fn(&mut Formatter) -> fmt::Result + Send + 'a;
+
+type FmtFnSync<'a> = dyn Fn(&mut Formatter) -> fmt::Result + Sync + 'a;
+
+type FmtFnSendSync<'a> = dyn Fn(&mut Formatter) -> fmt::Result + Send + Sync + 'a;
+
 /// A sequence of formatting directives and content, representing a formatted document or a fragment of it.
-pub struct Doc<'a> {
-    items: Vec<DocItem<'a>>,
+pub struct Doc<'a, F: ?Sized + 'a = FmtFn<'a>> {
+    items: Vec<DocItem<'a, F>>,
     head_segment_flat_width: usize,
     last_format_break_index: Option<usize>,
+    _marker: PhantomData<&'a ()>,
 }
 
-enum DocItem<'a> {
-    Atom(Atom<'a>),
-    FormatBox(FormatBox<'a>),
+/// [`Doc`] that implements [`Send`].
+pub type DocSend<'a> = Doc<'a, FmtFnSend<'a>>;
+
+/// [`Doc`] that implements [`Sync`].
+pub type DocSync<'a> = Doc<'a, FmtFnSync<'a>>;
+
+/// [`Doc`] that implements [`Send`] and [`Sync`].
+pub type DocSendSync<'a> = Doc<'a, FmtFnSendSync<'a>>;
+
+enum DocItem<'a, F: ?Sized + 'a> {
+    Atom(Atom<F>),
+    FormatBox(FormatBox<'a, F>),
     FormatBreak(FormatBreak),
 }
 
 /// A box.
-pub struct FormatBox<'a> {
+pub struct FormatBox<'a, F: ?Sized + 'a = FmtFn<'a>> {
     kind: FormatBoxKind,
     indent: usize,
-    doc: Doc<'a>,
+    doc: Doc<'a, F>,
     flat_width: usize,
 }
+
+/// [`FormatBox`] that implements [`Send`].
+pub type FormatBoxSend<'a> = FormatBox<'a, FmtFnSend<'a>>;
+
+/// [`FormatBox`] that implements [`Sync`].
+pub type FormatBoxSync<'a> = FormatBox<'a, FmtFnSync<'a>>;
+
+/// [`FormatBox`] that implements [`Send`] and [`Sync`].
+pub type FormatBoxSendSync<'a> = FormatBox<'a, FmtFnSendSync<'a>>;
 
 enum FormatBoxKind {
     H,
@@ -148,8 +179,8 @@ enum FormatBoxKind {
     HovS,
 }
 
-struct Atom<'a> {
-    fmt_fn: Box<dyn Fn(&mut Formatter) -> fmt::Result + 'a>,
+struct Atom<F: ?Sized> {
+    fmt_fn: Box<F>,
     width: usize,
 }
 
@@ -160,7 +191,16 @@ struct FormatBreak {
 }
 
 /// Builder pattern methods.
-impl<'a> Doc<'a> {
+impl<'a, F: ?Sized + 'a> Doc<'a, F> {
+    fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            head_segment_flat_width: 0,
+            last_format_break_index: None,
+            _marker: PhantomData,
+        }
+    }
+
     fn add_width(&mut self, delta: usize) {
         match self.last_format_break_index {
             None => self.head_segment_flat_width += delta,
@@ -176,43 +216,14 @@ impl<'a> Doc<'a> {
         }
     }
 
-    /// Appends indivisible content to the document, through a formatting closure.
-    ///
-    /// The content should not contain newlines.
-    ///
-    /// The formatting closure is called multiple times, to get the width of the content.
-    pub fn atom_fn(
-        self,
-        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + 'a,
-    ) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
-        Ok(self.atom_inner(Atom {
-            fmt_fn: Box::new(fmt_fn),
-            width,
-        }))
-    }
-
-    /// Appends indivisible content to the document, from a value implementing [`Display`].
-    ///
-    /// The content should not contain newlines.
-    ///
-    /// The value is formatted multiple times, to get the width of the content.
-    pub fn atom(self, d: impl Display + 'a) -> Result<Self, fmt::Error> {
-        let width = fmt_width::width_of(&d)?;
-        Ok(self.atom_inner(Atom {
-            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
-            width,
-        }))
-    }
-
-    fn atom_inner(mut self, atom: Atom<'a>) -> Self {
+    fn atom_inner(mut self, atom: Atom<F>) -> Self {
         self.add_width(atom.width);
         self.items.push(DocItem::Atom(atom));
         self
     }
 
     /// Appends a box to the document.
-    pub fn format_box(mut self, format_box: FormatBox<'a>) -> Self {
+    pub fn format_box(mut self, format_box: FormatBox<'a, F>) -> Self {
         self.add_width(format_box.flat_width);
         self.items.push(DocItem::FormatBox(format_box));
         self
@@ -244,7 +255,8 @@ impl<'a> Doc<'a> {
     }
 
     /// Extends the document with the items of another `Doc`.
-    pub fn extend(mut self, doc: Doc<'a>) -> Self {
+    pub fn extend(mut self, doc: impl Into<Doc<'a, F>>) -> Self {
+        let doc = doc.into();
         self.add_width(doc.head_segment_flat_width);
         if doc.last_format_break_index.is_some() {
             self.last_format_break_index = doc.last_format_break_index;
@@ -254,31 +266,221 @@ impl<'a> Doc<'a> {
     }
 
     /// Returns a value that implements [`Display`] to format the document with the given options.
-    pub fn display(&self, options: &'a FormattingOptions) -> DocDisplay<'_> {
+    pub fn display(&self, options: &'a FormattingOptions) -> DocDisplay<'_, F> {
         DocDisplay { doc: self, options }
+    }
+}
+
+/// Builder pattern methods.
+impl<'a> Doc<'a> {
+    /// Appends indivisible content to the document, through a formatting closure.
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The formatting closure is called multiple times, to get the width of the content.
+    pub fn atom_fn(
+        self,
+        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + 'a,
+    ) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
+        Ok(self.atom_inner(Atom {
+            fmt_fn: Box::new(fmt_fn),
+            width,
+        }))
+    }
+
+    /// Appends indivisible content to the document, from a value implementing [`Display`].
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The value is formatted multiple times, to get the width of the content.
+    pub fn atom(self, d: impl Display + 'a) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&d)?;
+        Ok(self.atom_inner(Atom {
+            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
+            width,
+        }))
     }
 }
 
 /// Constructs an empty [`Doc`].
 pub fn doc<'a>() -> Doc<'a> {
-    Doc {
-        items: Vec::new(),
-        head_segment_flat_width: 0,
-        last_format_break_index: None,
+    Doc::new()
+}
+
+/// Builder pattern methods.
+impl<'a> DocSend<'a> {
+    /// Appends indivisible content to the document, through a formatting closure.
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The formatting closure is called multiple times, to get the width of the content.
+    pub fn atom_fn(
+        self,
+        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + 'a,
+    ) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
+        Ok(self.atom_inner(Atom {
+            fmt_fn: Box::new(fmt_fn),
+            width,
+        }))
+    }
+
+    /// Appends indivisible content to the document, from a value implementing [`Display`].
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The value is formatted multiple times, to get the width of the content.
+    pub fn atom(self, d: impl Display + Send + 'a) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&d)?;
+        Ok(self.atom_inner(Atom {
+            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
+            width,
+        }))
+    }
+}
+
+/// Constructs an empty [`DocSend`].
+pub fn doc_send<'a>() -> DocSend<'a> {
+    Doc::new()
+}
+
+/// Builder pattern methods.
+impl<'a> DocSync<'a> {
+    /// Appends indivisible content to the document, through a formatting closure.
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The formatting closure is called multiple times, to get the width of the content.
+    pub fn atom_fn(
+        self,
+        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Sync + 'a,
+    ) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
+        Ok(self.atom_inner(Atom {
+            fmt_fn: Box::new(fmt_fn),
+            width,
+        }))
+    }
+
+    /// Appends indivisible content to the document, from a value implementing [`Display`].
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The value is formatted multiple times, to get the width of the content.
+    pub fn atom(self, d: impl Display + Sync + 'a) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&d)?;
+        Ok(self.atom_inner(Atom {
+            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
+            width,
+        }))
+    }
+}
+
+/// Constructs an empty [`DocSync`].
+pub fn doc_sync<'a>() -> DocSync<'a> {
+    Doc::new()
+}
+
+/// Builder pattern methods.
+impl<'a> DocSendSync<'a> {
+    /// Appends indivisible content to the document, through a formatting closure.
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The formatting closure is called multiple times, to get the width of the content.
+    pub fn atom_fn(
+        self,
+        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + Sync + 'a,
+    ) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
+        Ok(self.atom_inner(Atom {
+            fmt_fn: Box::new(fmt_fn),
+            width,
+        }))
+    }
+
+    /// Appends indivisible content to the document, from a value implementing [`Display`].
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The value is formatted multiple times, to get the width of the content.
+    pub fn atom(self, d: impl Display + Send + Sync + 'a) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&d)?;
+        Ok(self.atom_inner(Atom {
+            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
+            width,
+        }))
+    }
+}
+
+/// Constructs an empty [`DocSendSync`].
+pub fn doc_send_sync<'a>() -> DocSendSync<'a> {
+    Doc::new()
+}
+
+/// Builder pattern methods.
+impl<'a, F: ?Sized + 'a> FormatBox<'a, F> {
+    fn new(kind: FormatBoxKind, indent: usize) -> Self {
+        Self {
+            kind,
+            indent,
+            doc: Doc {
+                items: Vec::new(),
+                head_segment_flat_width: 0,
+                last_format_break_index: None,
+                _marker: PhantomData,
+            },
+            flat_width: 0,
+        }
+    }
+
+    /// Appends a nested box to the box.
+    pub fn format_box(mut self, format_box: FormatBox<'a, F>) -> Self {
+        self.flat_width += format_box.flat_width;
+        self.doc = self.doc.format_box(format_box);
+        self
+    }
+
+    /// Appends a break hint to the box.
+    pub fn format_break(mut self, spaces: usize, indent: usize) -> Self {
+        self.flat_width += spaces;
+        self.doc = self.doc.format_break(spaces, indent);
+        self
+    }
+
+    /// Appends a breaking space to the box.
+    ///
+    /// Convenience method for `format_break(1, 0)`.
+    pub fn space(self) -> Self {
+        self.format_break(1, 0)
+    }
+
+    /// Appends a newline hint to the box.
+    ///
+    /// Convenience method for `format_break(0, 0)`.
+    pub fn cut(self) -> Self {
+        self.format_break(0, 0)
+    }
+
+    /// Extends the box with the items of a [`Doc`].
+    pub fn extend(mut self, doc: impl Into<Doc<'a, F>>) -> Self {
+        let doc = doc.into();
+        self.flat_width += doc
+            .items
+            .iter()
+            .fold(0, |flat_width, doc_item| match doc_item {
+                DocItem::Atom(atom) => flat_width + atom.width,
+                DocItem::FormatBox(format_box) => flat_width + format_box.flat_width,
+                DocItem::FormatBreak(format_break) => flat_width + format_break.spaces,
+            });
+        self.doc = self.doc.extend(doc);
+        self
     }
 }
 
 /// Builder pattern methods.
 impl<'a> FormatBox<'a> {
-    fn new(kind: FormatBoxKind, indent: usize) -> Self {
-        Self {
-            kind,
-            indent,
-            doc: doc(),
-            flat_width: 0,
-        }
-    }
-
     /// Appends indivisible content to the box, through a formatting closure.
     ///
     /// The content should not contain newlines.
@@ -311,48 +513,6 @@ impl<'a> FormatBox<'a> {
         });
         Ok(self)
     }
-
-    /// Appends a nested box to the box.
-    pub fn format_box(mut self, format_box: FormatBox<'a>) -> Self {
-        self.flat_width += format_box.flat_width;
-        self.doc = self.doc.format_box(format_box);
-        self
-    }
-
-    /// Appends a break hint to the box.
-    pub fn format_break(mut self, spaces: usize, indent: usize) -> Self {
-        self.flat_width += spaces;
-        self.doc = self.doc.format_break(spaces, indent);
-        self
-    }
-
-    /// Appends a breaking space to the box.
-    ///
-    /// Convenience method for `format_break(1, 0)`.
-    pub fn space(self) -> Self {
-        self.format_break(1, 0)
-    }
-
-    /// Appends a newline hint to the box.
-    ///
-    /// Convenience method for `format_break(0, 0)`.
-    pub fn cut(self) -> Self {
-        self.format_break(0, 0)
-    }
-
-    /// Extends the box with the items of a [`Doc`].
-    pub fn extend(mut self, doc: Doc<'a>) -> Self {
-        self.flat_width += doc
-            .items
-            .iter()
-            .fold(0, |flat_width, doc_item| match doc_item {
-                DocItem::Atom(atom) => flat_width + atom.width,
-                DocItem::FormatBox(format_box) => flat_width + format_box.flat_width,
-                DocItem::FormatBreak(format_break) => flat_width + format_break.spaces,
-            });
-        self.doc = self.doc.extend(doc);
-        self
-    }
 }
 
 /// Constructs an empty horizontal box (h box, `hbox`).
@@ -380,14 +540,197 @@ pub fn sbox<'a>(indent: usize) -> FormatBox<'a> {
     FormatBox::new(FormatBoxKind::HovS, indent)
 }
 
+/// Builder pattern methods.
+impl<'a> FormatBoxSend<'a> {
+    /// Appends indivisible content to the box, through a formatting closure.
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The formatting closure is called multiple times, to get the width of the content.
+    pub fn atom_fn(
+        mut self,
+        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + 'a,
+    ) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
+        self.flat_width += width;
+        self.doc = self.doc.atom_inner(Atom {
+            fmt_fn: Box::new(fmt_fn),
+            width,
+        });
+        Ok(self)
+    }
+
+    /// Appends indivisible content to the box, from a value implementing [`Display`].
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The value is formatted multiple times, to get the width of the content.
+    pub fn atom(mut self, d: impl Display + Send + 'a) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&d)?;
+        self.flat_width += width;
+        self.doc = self.doc.atom_inner(Atom {
+            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
+            width,
+        });
+        Ok(self)
+    }
+}
+
+/// Constructs an empty horizontal box (h box, `hbox`).
+pub fn hbox_send<'a>() -> FormatBoxSend<'a> {
+    FormatBox::new(FormatBoxKind::H, 0)
+}
+
+/// Constructs an empty vertical box (v box, `vbox`).
+pub fn vbox_send<'a>(indent: usize) -> FormatBoxSend<'a> {
+    FormatBox::new(FormatBoxKind::V, indent)
+}
+
+/// Constructs an empty horizontal/vertical box (hv box, `hvbox`).
+pub fn hvbox_send<'a>(indent: usize) -> FormatBoxSend<'a> {
+    FormatBox::new(FormatBoxKind::Hv, indent)
+}
+
+/// Constructs an empty horizontal-or-vertical packing box (hov packing box, `hovbox`).
+pub fn hovbox_send<'a>(indent: usize) -> FormatBoxSend<'a> {
+    FormatBox::new(FormatBoxKind::HovP, indent)
+}
+
+/// Constructs an empty horizontal-or-vertical structural box (hov structural box, `box`).
+pub fn sbox_send<'a>(indent: usize) -> FormatBoxSend<'a> {
+    FormatBox::new(FormatBoxKind::HovS, indent)
+}
+
+/// Builder pattern methods.
+impl<'a> FormatBoxSync<'a> {
+    /// Appends indivisible content to the box, through a formatting closure.
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The formatting closure is called multiple times, to get the width of the content.
+    pub fn atom_fn(
+        mut self,
+        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Sync + 'a,
+    ) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
+        self.flat_width += width;
+        self.doc = self.doc.atom_inner(Atom {
+            fmt_fn: Box::new(fmt_fn),
+            width,
+        });
+        Ok(self)
+    }
+
+    /// Appends indivisible content to the box, from a value implementing [`Display`].
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The value is formatted multiple times, to get the width of the content.
+    pub fn atom(mut self, d: impl Display + Sync + 'a) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&d)?;
+        self.flat_width += width;
+        self.doc = self.doc.atom_inner(Atom {
+            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
+            width,
+        });
+        Ok(self)
+    }
+}
+
+/// Constructs an empty horizontal box (h box, `hbox`).
+pub fn hbox_sync<'a>() -> FormatBoxSync<'a> {
+    FormatBox::new(FormatBoxKind::H, 0)
+}
+
+/// Constructs an empty vertical box (v box, `vbox`).
+pub fn vbox_sync<'a>(indent: usize) -> FormatBoxSync<'a> {
+    FormatBox::new(FormatBoxKind::V, indent)
+}
+
+/// Constructs an empty horizontal/vertical box (hv box, `hvbox`).
+pub fn hvbox_sync<'a>(indent: usize) -> FormatBoxSync<'a> {
+    FormatBox::new(FormatBoxKind::Hv, indent)
+}
+
+/// Constructs an empty horizontal-or-vertical packing box (hov packing box, `hovbox`).
+pub fn hovbox_sync<'a>(indent: usize) -> FormatBoxSync<'a> {
+    FormatBox::new(FormatBoxKind::HovP, indent)
+}
+
+/// Constructs an empty horizontal-or-vertical structural box (hov structural box, `box`).
+pub fn sbox_sync<'a>(indent: usize) -> FormatBoxSync<'a> {
+    FormatBox::new(FormatBoxKind::HovS, indent)
+}
+
+/// Builder pattern methods.
+impl<'a> FormatBoxSendSync<'a> {
+    /// Appends indivisible content to the box, through a formatting closure.
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The formatting closure is called multiple times, to get the width of the content.
+    pub fn atom_fn(
+        mut self,
+        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + Sync + 'a,
+    ) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn))?;
+        self.flat_width += width;
+        self.doc = self.doc.atom_inner(Atom {
+            fmt_fn: Box::new(fmt_fn),
+            width,
+        });
+        Ok(self)
+    }
+
+    /// Appends indivisible content to the box, from a value implementing [`Display`].
+    ///
+    /// The content should not contain newlines.
+    ///
+    /// The value is formatted multiple times, to get the width of the content.
+    pub fn atom(mut self, d: impl Display + Send + Sync + 'a) -> Result<Self, fmt::Error> {
+        let width = fmt_width::width_of(&d)?;
+        self.flat_width += width;
+        self.doc = self.doc.atom_inner(Atom {
+            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
+            width,
+        });
+        Ok(self)
+    }
+}
+
+/// Constructs an empty horizontal box (h box, `hbox`).
+pub fn hbox_send_sync<'a>() -> FormatBoxSendSync<'a> {
+    FormatBox::new(FormatBoxKind::H, 0)
+}
+
+/// Constructs an empty vertical box (v box, `vbox`).
+pub fn vbox_send_sync<'a>(indent: usize) -> FormatBoxSendSync<'a> {
+    FormatBox::new(FormatBoxKind::V, indent)
+}
+
+/// Constructs an empty horizontal/vertical box (hv box, `hvbox`).
+pub fn hvbox_send_sync<'a>(indent: usize) -> FormatBoxSendSync<'a> {
+    FormatBox::new(FormatBoxKind::Hv, indent)
+}
+
+/// Constructs an empty horizontal-or-vertical packing box (hov packing box, `hovbox`).
+pub fn hovbox_send_sync<'a>(indent: usize) -> FormatBoxSendSync<'a> {
+    FormatBox::new(FormatBoxKind::HovP, indent)
+}
+
+/// Constructs an empty horizontal-or-vertical structural box (hov structural box, `box`).
+pub fn sbox_send_sync<'a>(indent: usize) -> FormatBoxSendSync<'a> {
+    FormatBox::new(FormatBoxKind::HovS, indent)
+}
+
 /// A helper type created by [`Doc::display`] that implements [`Display`].
 #[derive(Clone, Copy)]
-pub struct DocDisplay<'a> {
-    doc: &'a Doc<'a>,
+pub struct DocDisplay<'a, F: ?Sized + 'a> {
+    doc: &'a Doc<'a, F>,
     options: &'a FormattingOptions,
 }
 
-impl<'a> Display for DocDisplay<'a> {
+impl<'a, F: ?Sized + Fn(&mut Formatter) -> fmt::Result + 'a> Display for DocDisplay<'a, F> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         Engine {
             options: self.options,
@@ -410,7 +753,7 @@ struct Engine<'a, 'b> {
 
 impl<'a, 'b> Engine<'a, 'b> {
     // `hovbox(0)`, as per `pp_rinit` and `pp_open_sys_box`.
-    fn fmt(&mut self, doc: &Doc) -> fmt::Result {
+    fn fmt(&mut self, doc: &Doc<impl ?Sized + Fn(&mut Formatter) -> fmt::Result>) -> fmt::Result {
         doc.items.iter().try_for_each(|doc_item| match doc_item {
             DocItem::Atom(atom) => self.fmt_atom(atom),
             DocItem::FormatBox(format_box) => {
@@ -433,7 +776,10 @@ impl<'a, 'b> Engine<'a, 'b> {
         })
     }
 
-    fn fmt_format_box(&mut self, format_box: &FormatBox) -> fmt::Result {
+    fn fmt_format_box(
+        &mut self,
+        format_box: &FormatBox<impl ?Sized + Fn(&mut Formatter) -> fmt::Result>,
+    ) -> fmt::Result {
         let curr_indent = self.caret_pos + format_box.indent;
         let fmt_newline = |engine: &mut Self, format_break_indent| {
             engine.fmt_newline(curr_indent + format_break_indent)
@@ -496,7 +842,10 @@ impl<'a, 'b> Engine<'a, 'b> {
             })
     }
 
-    fn fmt_atom(&mut self, atom: &Atom) -> fmt::Result {
+    fn fmt_atom(
+        &mut self,
+        atom: &Atom<impl ?Sized + Fn(&mut Formatter) -> fmt::Result>,
+    ) -> fmt::Result {
         self.caret_pos += atom.width;
         self.just_newline = false;
         (atom.fmt_fn)(self.f)

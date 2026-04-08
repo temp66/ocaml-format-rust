@@ -21,15 +21,15 @@ impl fmt::Write for WidthCounter {
     }
 }
 
-pub struct FmtFnWrapper<'a, T>(&'a T);
+pub struct FmtFnWrapper<T>(T);
 
-impl<'a, T: Fn(&mut Formatter) -> fmt::Result> FmtFnWrapper<'a, T> {
-    pub fn new(fmt_fn: &'a T) -> Self {
+impl<T> FmtFnWrapper<T> {
+    pub fn new(fmt_fn: T) -> Self {
         Self(fmt_fn)
     }
 }
 
-impl<'a, T: Fn(&mut Formatter) -> fmt::Result> Display for FmtFnWrapper<'a, T> {
+impl<T: Fn(&mut Formatter) -> fmt::Result> Display for FmtFnWrapper<T> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         self.0(f)
     }
@@ -37,6 +37,7 @@ impl<'a, T: Fn(&mut Formatter) -> fmt::Result> Display for FmtFnWrapper<'a, T> {
 
 pub fn width_of<'a, T>(d: &'a T) -> Result<usize, fmt::Error>
 where
+    T: ?Sized,
     &'a T: Display,
 {
     let mut width_counter = WidthCounter::new();
