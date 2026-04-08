@@ -11,7 +11,7 @@
 //! # Examples
 //!
 //! ```
-//! use std::fmt::{self, Display, Formatter, Write as _};
+//! use std::fmt::{self, Display, Formatter};
 //!
 //! use ocaml_format::{Doc, FormattingOptions, doc, sbox};
 //!
@@ -70,18 +70,15 @@
 //!         )),
 //!     );
 //!
-//!     let mut buf = String::new();
 //!     let doc = expr.to_doc()?;
-//!     write!(
-//!         buf,
-//!         "{}",
-//!         doc.display(&FormattingOptions {
-//!             width: 10,
-//!             max_indent: 10,
-//!         }),
-//!     )?;
 //!     assert_eq!(
-//!         buf,
+//!         format!(
+//!             "{}",
+//!             doc.display(&FormattingOptions {
+//!                 width: 10,
+//!                 max_indent: 10,
+//!             }),
+//!         ),
 //!         "\
 //! (λx.
 //!  ((λx. x)
@@ -882,16 +879,16 @@ mod tests {
                 .format_break(1, 0)
                 .atom_fn(|f| write!(f, "--"))?,
         );
-        let mut buf = String::new();
-        write!(
-            buf,
-            "{}",
-            doc.display(&FormattingOptions {
-                width: 5,
-                max_indent: 5,
-            }),
-        )?;
-        assert_eq!(buf, "-- -- --");
+        assert_eq!(
+            format!(
+                "{}",
+                doc.display(&FormattingOptions {
+                    width: 5,
+                    max_indent: 5,
+                }),
+            ),
+            "-- -- --",
+        );
         Ok(())
     }
 
@@ -905,17 +902,14 @@ mod tests {
                 .format_break(1, 0)
                 .atom_fn(|f| write!(f, "--"))?,
         );
-        let mut buf = String::new();
-        write!(
-            buf,
-            "{}",
-            doc.display(&FormattingOptions {
-                width: 5,
-                max_indent: 5,
-            }),
-        )?;
         assert_eq!(
-            buf,
+            format!(
+                "{}",
+                doc.display(&FormattingOptions {
+                    width: 5,
+                    max_indent: 5,
+                }),
+            ),
             "\
 --
  --
@@ -934,16 +928,16 @@ mod tests {
                 .format_break(1, 0)
                 .atom_fn(|f| write!(f, "--"))?,
         );
-        let mut buf = String::new();
-        write!(
-            buf,
-            "{}",
-            doc.display(&FormattingOptions {
-                width: 10,
-                max_indent: 10,
-            }),
-        )?;
-        assert_eq!(buf, "-- -- --");
+        assert_eq!(
+            format!(
+                "{}",
+                doc.display(&FormattingOptions {
+                    width: 10,
+                    max_indent: 10,
+                }),
+            ),
+            "-- -- --",
+        );
         Ok(())
     }
 
@@ -957,17 +951,14 @@ mod tests {
                 .format_break(1, 0)
                 .atom_fn(|f| write!(f, "---"))?,
         );
-        let mut buf = String::new();
-        write!(
-            buf,
-            "{}",
-            doc.display(&FormattingOptions {
-                width: 10,
-                max_indent: 10,
-            }),
-        )?;
         assert_eq!(
-            buf,
+            format!(
+                "{}",
+                doc.display(&FormattingOptions {
+                    width: 10,
+                    max_indent: 10,
+                }),
+            ),
             "\
 ---
  ---
@@ -986,17 +977,14 @@ mod tests {
                 .format_break(1, 0)
                 .atom_fn(|f| write!(f, "---"))?,
         );
-        let mut buf = String::new();
-        write!(
-            buf,
-            "{}",
-            doc.display(&FormattingOptions {
-                width: 10,
-                max_indent: 10,
-            }),
-        )?;
         assert_eq!(
-            buf,
+            format!(
+                "{}",
+                doc.display(&FormattingOptions {
+                    width: 10,
+                    max_indent: 10,
+                }),
+            ),
             "\
 --- ---
   ---",
@@ -1014,17 +1002,14 @@ mod tests {
                 .format_break(1, 0)
                 .atom_fn(|f| write!(f, "---"))?,
         );
-        let mut buf = String::new();
-        write!(
-            buf,
-            "{}",
-            doc.display(&FormattingOptions {
-                width: 6,
-                max_indent: 6,
-            }),
-        )?;
         assert_eq!(
-            buf,
+            format!(
+                "{}",
+                doc.display(&FormattingOptions {
+                    width: 6,
+                    max_indent: 6,
+                }),
+            ),
             "\
 ---
   ---
@@ -1045,17 +1030,14 @@ mod tests {
                 .format_break(1, 0)
                 .atom_fn(|f| write!(f, "--"))?,
         );
-        let mut buf = String::new();
-        write!(
-            buf,
-            "{}",
-            doc.display(&FormattingOptions {
-                width: 11,
-                max_indent: 11,
-            }),
-        )?;
         assert_eq!(
-            buf,
+            format!(
+                "{}",
+                doc.display(&FormattingOptions {
+                    width: 11,
+                    max_indent: 11,
+                }),
+            ),
             "\
 ---[-- --
       -- --",
@@ -1075,17 +1057,14 @@ mod tests {
                 .format_break(1, 2)
                 .atom_fn(|f| write!(f, "--"))?,
         );
-        let mut buf = String::new();
-        write!(
-            buf,
-            "{}",
-            doc.display(&FormattingOptions {
-                width: 10,
-                max_indent: 10,
-            }),
-        )?;
         assert_eq!(
-            buf,
+            format!(
+                "{}",
+                doc.display(&FormattingOptions {
+                    width: 10,
+                    max_indent: 10,
+                }),
+            ),
             "\
 ---[-- --
       --
@@ -1116,17 +1095,14 @@ mod tests {
                 .format_break(0, 0)
                 .atom_fn(|f| write!(f, ")"))?,
         );
-        let mut buf = String::new();
-        write!(
-            buf,
-            "{}",
-            doc.display(&FormattingOptions {
-                width: 10,
-                max_indent: 10,
-            }),
-        )?;
         assert_eq!(
-            buf,
+            format!(
+                "{}",
+                doc.display(&FormattingOptions {
+                    width: 10,
+                    max_indent: 10,
+                }),
+            ),
             "\
 (---
  (----
@@ -1140,16 +1116,16 @@ mod tests {
     #[test]
     fn test_atom() -> fmt::Result {
         let doc = doc().atom(42)?;
-        let mut buf = String::new();
-        write!(
-            buf,
-            "{}",
-            doc.display(&FormattingOptions {
-                width: 10,
-                max_indent: 10,
-            }),
-        )?;
-        assert_eq!(buf, "42");
+        assert_eq!(
+            format!(
+                "{}",
+                doc.display(&FormattingOptions {
+                    width: 10,
+                    max_indent: 10,
+                }),
+            ),
+            "42",
+        );
         Ok(())
     }
 
@@ -1164,17 +1140,14 @@ mod tests {
                 ),
             ),
         );
-        let mut buf = String::new();
-        write!(
-            buf,
-            "{}",
-            doc.display(&FormattingOptions {
-                width: 10,
-                max_indent: 5,
-            }),
-        )?;
         assert_eq!(
-            buf,
+            format!(
+                "{}",
+                doc.display(&FormattingOptions {
+                    width: 10,
+                    max_indent: 5,
+                }),
+            ),
             "\
 v
   v
