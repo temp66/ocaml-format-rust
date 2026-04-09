@@ -88,6 +88,8 @@ use fmt_width::FmtFnWrapper;
 use std::{
     fmt::{self, Display, Formatter},
     marker::PhantomData,
+    ops::Deref,
+    sync::Arc,
 };
 
 mod convert;
@@ -144,16 +146,17 @@ impl Default for FormattingOptions {
     }
 }
 
-type FmtFn<'a> = dyn Fn(&mut Formatter) -> fmt::Result + 'a;
+type FmtFn<'a> = Arc<dyn Fn(&mut Formatter) -> fmt::Result + 'a>;
 
-type FmtFnSend<'a> = dyn Fn(&mut Formatter) -> fmt::Result + Send + 'a;
+type FmtFnSend<'a> = Arc<dyn Fn(&mut Formatter) -> fmt::Result + Send + 'a>;
 
-type FmtFnSync<'a> = dyn Fn(&mut Formatter) -> fmt::Result + Sync + 'a;
+type FmtFnSync<'a> = Arc<dyn Fn(&mut Formatter) -> fmt::Result + Sync + 'a>;
 
-type FmtFnSendSync<'a> = dyn Fn(&mut Formatter) -> fmt::Result + Send + Sync + 'a;
+type FmtFnSendSync<'a> = Arc<dyn Fn(&mut Formatter) -> fmt::Result + Send + Sync + 'a>;
 
 /// A sequence of formatting directives and content, representing a formatted document or a fragment of it.
-pub struct Doc<'a, F: ?Sized + 'a = FmtFn<'a>> {
+#[derive(Clone)]
+pub struct Doc<'a, F: 'a = FmtFn<'a>> {
     items: Vec<DocItem<'a, F>>,
     flat_width: usize,
     head_segment_flat_width: usize,
@@ -170,13 +173,15 @@ pub type DocSync<'a> = Doc<'a, FmtFnSync<'a>>;
 /// [`Doc`] that implements [`Send`] and [`Sync`].
 pub type DocSendSync<'a> = Doc<'a, FmtFnSendSync<'a>>;
 
-enum DocItem<'a, F: ?Sized + 'a> {
+#[derive(Clone)]
+enum DocItem<'a, F: 'a> {
     FormatBox(FormatBox<'a, F>),
     Atom(Atom<F>),
     FormatBreak(FormatBreak),
 }
 
-struct FormatBox<'a, F: ?Sized + 'a> {
+#[derive(Clone)]
+struct FormatBox<'a, F: 'a> {
     kind: FormatBoxKind,
     indent: usize,
     doc: Doc<'a, F>,
@@ -191,11 +196,13 @@ enum FormatBoxKind {
     HovS,
 }
 
-struct Atom<F: ?Sized> {
-    fmt_fn: Box<F>,
+#[derive(Clone)]
+struct Atom<F> {
+    fmt_fn: F,
     width: usize,
 }
 
+#[derive(Clone)]
 struct FormatBreak {
     spaces: usize,
     indent: usize,
@@ -203,7 +210,7 @@ struct FormatBreak {
 }
 
 /// Builder pattern methods.
-impl<'a, F: ?Sized + 'a> Doc<'a, F> {
+impl<'a, F: 'a> Doc<'a, F> {
     /// Creates an empty `Doc`.
     pub fn new() -> Self {
         Self {
@@ -377,7 +384,7 @@ impl<'a, F: ?Sized + 'a> Doc<'a, F> {
 }
 
 /// Creates an empty `Doc`.
-impl<'a, F: ?Sized + 'a> Default for Doc<'a, F> {
+impl<'a, F: 'a> Default for Doc<'a, F> {
     fn default() -> Self {
         Self::new()
     }
@@ -393,7 +400,7 @@ impl<'a> Doc<'a> {
     pub fn atom_fn(&mut self, fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + 'a) -> &mut Self {
         let width = fmt_width::width_of(FmtFnWrapper::new(&fmt_fn));
         self.atom_inner(Atom {
-            fmt_fn: Box::new(fmt_fn),
+            fmt_fn: Arc::new(fmt_fn),
             width,
         })
     }
@@ -406,7 +413,7 @@ impl<'a> Doc<'a> {
     pub fn atom(&mut self, d: impl Display + 'a) -> &mut Self {
         let width = fmt_width::width_of(&d);
         self.atom_inner(Atom {
-            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
+            fmt_fn: Arc::new(move |f| write!(f, "{}", d)),
             width,
         })
     }
@@ -425,7 +432,7 @@ impl<'a> DocSend<'a> {
     ) -> &mut Self {
         let width = fmt_width::width_of(FmtFnWrapper::new(&fmt_fn));
         self.atom_inner(Atom {
-            fmt_fn: Box::new(fmt_fn),
+            fmt_fn: Arc::new(fmt_fn),
             width,
         })
     }
@@ -438,7 +445,7 @@ impl<'a> DocSend<'a> {
     pub fn atom(&mut self, d: impl Display + Send + 'a) -> &mut Self {
         let width = fmt_width::width_of(&d);
         self.atom_inner(Atom {
-            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
+            fmt_fn: Arc::new(move |f| write!(f, "{}", d)),
             width,
         })
     }
@@ -457,7 +464,7 @@ impl<'a> DocSync<'a> {
     ) -> &mut Self {
         let width = fmt_width::width_of(FmtFnWrapper::new(&fmt_fn));
         self.atom_inner(Atom {
-            fmt_fn: Box::new(fmt_fn),
+            fmt_fn: Arc::new(fmt_fn),
             width,
         })
     }
@@ -470,7 +477,7 @@ impl<'a> DocSync<'a> {
     pub fn atom(&mut self, d: impl Display + Sync + 'a) -> &mut Self {
         let width = fmt_width::width_of(&d);
         self.atom_inner(Atom {
-            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
+            fmt_fn: Arc::new(move |f| write!(f, "{}", d)),
             width,
         })
     }
@@ -489,7 +496,7 @@ impl<'a> DocSendSync<'a> {
     ) -> &mut Self {
         let width = fmt_width::width_of(FmtFnWrapper::new(&fmt_fn));
         self.atom_inner(Atom {
-            fmt_fn: Box::new(fmt_fn),
+            fmt_fn: Arc::new(fmt_fn),
             width,
         })
     }
@@ -502,7 +509,7 @@ impl<'a> DocSendSync<'a> {
     pub fn atom(&mut self, d: impl Display + Send + Sync + 'a) -> &mut Self {
         let width = fmt_width::width_of(&d);
         self.atom_inner(Atom {
-            fmt_fn: Box::new(move |f| write!(f, "{}", d)),
+            fmt_fn: Arc::new(move |f| write!(f, "{}", d)),
             width,
         })
     }
@@ -510,12 +517,16 @@ impl<'a> DocSendSync<'a> {
 
 /// A helper type created by [`Doc::display`] that implements [`Display`].
 #[derive(Clone, Copy)]
-pub struct DocDisplay<'a, F: ?Sized + 'a> {
+pub struct DocDisplay<'a, F: 'a> {
     doc: &'a Doc<'a, F>,
     options: &'a FormattingOptions,
 }
 
-impl<'a, F: ?Sized + Fn(&mut Formatter) -> fmt::Result + 'a> Display for DocDisplay<'a, F> {
+impl<'a, F> Display for DocDisplay<'a, F>
+where
+    F: Deref + 'a,
+    F::Target: Fn(&mut Formatter) -> fmt::Result,
+{
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         // As per `pp_rinit`, `pp_open_sys_box`, and `pp_make_formatter`.
         // Note `self` is wrapped in an "hovbox(0)".
@@ -539,12 +550,16 @@ struct Engine<'a, 'b> {
 }
 
 impl<'a, 'b> Engine<'a, 'b> {
-    fn fmt(
+    fn fmt<F>(
         &mut self,
         format_box_kind: FormatBoxKind,
         format_box_indent: usize,
-        doc: &Doc<impl ?Sized + Fn(&mut Formatter) -> fmt::Result>,
-    ) -> fmt::Result {
+        doc: &Doc<F>,
+    ) -> fmt::Result
+    where
+        F: Deref,
+        F::Target: Fn(&mut Formatter) -> fmt::Result,
+    {
         let curr_indent = self.caret_pos + format_box_indent;
         let fmt_newline = |engine: &mut Self, format_break_indent| {
             engine.fmt_newline(curr_indent + format_break_indent)
@@ -603,10 +618,11 @@ impl<'a, 'b> Engine<'a, 'b> {
         })
     }
 
-    fn fmt_atom(
-        &mut self,
-        atom: &Atom<impl ?Sized + Fn(&mut Formatter) -> fmt::Result>,
-    ) -> fmt::Result {
+    fn fmt_atom<F>(&mut self, atom: &Atom<F>) -> fmt::Result
+    where
+        F: Deref,
+        F::Target: Fn(&mut Formatter) -> fmt::Result,
+    {
         self.caret_pos += atom.width;
         self.just_newline = false;
         (atom.fmt_fn)(self.f)
