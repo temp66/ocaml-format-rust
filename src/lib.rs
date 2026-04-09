@@ -407,6 +407,13 @@ impl<'a> Doc<'a> {
             width,
         })
     }
+
+    /// Reflects `%S` in OCaml.
+    ///
+    /// Appends a string to the document, quoted in OCaml style.
+    pub fn quoted(&mut self, s: impl AsRef<str> + 'a) -> &mut Self {
+        self.atom_fn(quoted(s))
+    }
 }
 
 /// Builder pattern methods.
@@ -438,6 +445,30 @@ impl<'a> DocSync<'a> {
             fmt_fn: Arc::new(move |f| write!(f, "{}", d)),
             width,
         })
+    }
+
+    /// Appends a string to the document, quoted in OCaml style.
+    pub fn quoted(&mut self, s: impl AsRef<str> + Send + Sync + 'a) -> &mut Self {
+        self.atom_fn(quoted(s))
+    }
+}
+
+fn quoted(s: impl AsRef<str>) -> impl Fn(&mut Formatter) -> fmt::Result {
+    move |f| {
+        write!(f, r#"""#)?;
+        for c in s.as_ref().bytes() {
+            match c {
+                b'"' => write!(f, r#"\""#)?,
+                b'\\' => write!(f, r#"\\"#)?,
+                b'\n' => write!(f, r#"\n"#)?,
+                b'\t' => write!(f, r#"\t"#)?,
+                b'\r' => write!(f, r#"\r"#)?,
+                b'\x08' => write!(f, r#"\b"#)?,
+                b' '..=b'~' => write!(f, "{}", c as char)?,
+                c => write!(f, r#"\{c:0<3}"#)?,
+            }
+        }
+        write!(f, r#"""#)
     }
 }
 
@@ -840,5 +871,15 @@ v
         fn assert_send_sync(_: impl Send + Sync) {}
 
         assert_send_sync(DocSync::new());
+    }
+
+    #[test]
+    fn test_quoted() {
+        let mut doc: Doc = Doc::new();
+        doc.quoted("Hell\"\\\n\t\r\x08\u{12345}o");
+        assert_eq!(
+            format!("{}", doc.display(&FormattingOptions::new())),
+            r#""Hell\"\\\n\t\r\b\240\146\141\133o""#,
+        )
     }
 }
