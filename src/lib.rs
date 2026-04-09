@@ -336,7 +336,7 @@ impl<'a> Doc<'a> {
     ///
     /// The formatting closure is called multiple times, to get the width of the content.
     pub fn atom_fn(&mut self, fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + 'a) -> &mut Self {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
+        let width = fmt_width::width_of(FmtFnWrapper::new(&fmt_fn));
         self.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,
@@ -368,7 +368,7 @@ impl<'a> DocSend<'a> {
         &mut self,
         fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + 'a,
     ) -> &mut Self {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
+        let width = fmt_width::width_of(FmtFnWrapper::new(&fmt_fn));
         self.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,
@@ -400,7 +400,7 @@ impl<'a> DocSync<'a> {
         &mut self,
         fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Sync + 'a,
     ) -> &mut Self {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
+        let width = fmt_width::width_of(FmtFnWrapper::new(&fmt_fn));
         self.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,
@@ -432,7 +432,7 @@ impl<'a> DocSendSync<'a> {
         &mut self,
         fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + Sync + 'a,
     ) -> &mut Self {
-        let width = fmt_width::width_of(&FmtFnWrapper::new(&fmt_fn));
+        let width = fmt_width::width_of(FmtFnWrapper::new(&fmt_fn));
         self.atom_inner(Atom {
             fmt_fn: Box::new(fmt_fn),
             width,

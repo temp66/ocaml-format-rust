@@ -35,11 +35,7 @@ impl<T: Fn(&mut Formatter) -> fmt::Result> Display for FmtFnWrapper<T> {
     }
 }
 
-pub fn width_of<'a, T>(d: &'a T) -> usize
-where
-    T: ?Sized,
-    &'a T: Display,
-{
+pub fn width_of(d: impl Display) -> usize {
     let mut width_counter = WidthCounter::new();
     write!(width_counter, "{}", d).unwrap();
     width_counter.get()
