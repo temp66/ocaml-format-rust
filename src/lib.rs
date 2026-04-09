@@ -231,38 +231,38 @@ impl<'a, F: ?Sized + 'a> Doc<'a, F> {
     }
 
     /// Appends a horizontal box (h box, `hbox`) to the document.
-    pub fn hbox(&mut self, build_doc: impl FnOnce(&mut Self)) -> &mut Self {
-        self.format_box(FormatBoxKind::H, 0, build_doc)
+    pub fn hbox(&mut self, build_fn: impl FnOnce(&mut Self)) -> &mut Self {
+        self.format_box(FormatBoxKind::H, 0, build_fn)
     }
 
     /// Appends a vertical box (v box, `vbox`) to the document.
-    pub fn vbox(&mut self, indent: usize, build_doc: impl FnOnce(&mut Self)) -> &mut Self {
-        self.format_box(FormatBoxKind::V, indent, build_doc)
+    pub fn vbox(&mut self, indent: usize, build_fn: impl FnOnce(&mut Self)) -> &mut Self {
+        self.format_box(FormatBoxKind::V, indent, build_fn)
     }
 
     /// Appends a horizontal/vertical box (hv box, `hvbox`) to the document.
-    pub fn hvbox(&mut self, indent: usize, build_doc: impl FnOnce(&mut Self)) -> &mut Self {
-        self.format_box(FormatBoxKind::Hv, indent, build_doc)
+    pub fn hvbox(&mut self, indent: usize, build_fn: impl FnOnce(&mut Self)) -> &mut Self {
+        self.format_box(FormatBoxKind::Hv, indent, build_fn)
     }
 
     /// Appends a horizontal-or-vertical packing box (hov packing box, `hovbox`) to the document.
-    pub fn hovbox(&mut self, indent: usize, build_doc: impl FnOnce(&mut Self)) -> &mut Self {
-        self.format_box(FormatBoxKind::HovP, indent, build_doc)
+    pub fn hovbox(&mut self, indent: usize, build_fn: impl FnOnce(&mut Self)) -> &mut Self {
+        self.format_box(FormatBoxKind::HovP, indent, build_fn)
     }
 
     /// Appends a horizontal-or-vertical structural box (hov structural box, `box`) to the document.
-    pub fn sbox(&mut self, indent: usize, build_doc: impl FnOnce(&mut Self)) -> &mut Self {
-        self.format_box(FormatBoxKind::HovS, indent, build_doc)
+    pub fn sbox(&mut self, indent: usize, build_fn: impl FnOnce(&mut Self)) -> &mut Self {
+        self.format_box(FormatBoxKind::HovS, indent, build_fn)
     }
 
     fn format_box(
         &mut self,
         kind: FormatBoxKind,
         indent: usize,
-        build_doc: impl FnOnce(&mut Self),
+        build_fn: impl FnOnce(&mut Self),
     ) -> &mut Self {
         let mut doc = Self::new();
-        build_doc(&mut doc);
+        build_fn(&mut doc);
         self.flat_width += doc.flat_width;
         self.add_segment_flat_width(doc.flat_width);
         self.items
@@ -312,6 +312,61 @@ impl<'a, F: ?Sized + 'a> Doc<'a, F> {
             self.last_format_break_index = doc.last_format_break_index;
         }
         self.items.extend(doc.items);
+        self
+    }
+
+    /// Prints an iterable collection, with an optional separator.
+    pub fn print_iter<T>(
+        &mut self,
+        sep: Option<impl FnMut(&mut Self)>,
+        print_elem: impl FnMut(&mut Self, T),
+        iter: impl IntoIterator<Item = T>,
+    ) -> &mut Self {
+        match sep {
+            None => self.print_iter_inner(
+                |doc: &mut Self| {
+                    doc.cut();
+                },
+                print_elem,
+                iter,
+            ),
+            Some(sep) => self.print_iter_inner(sep, print_elem, iter),
+        }
+    }
+
+    fn print_iter_inner<T>(
+        &mut self,
+        mut sep: impl FnMut(&mut Self),
+        mut print_elem: impl FnMut(&mut Self, T),
+        iter: impl IntoIterator<Item = T>,
+    ) -> &mut Self {
+        let mut first = true;
+        iter.into_iter().for_each(|elem| {
+            if first {
+                first = false;
+            } else {
+                sep(self);
+            }
+            print_elem(self, elem);
+        });
+        self
+    }
+
+    /// Prints an `Option`.
+    pub fn print_option<T>(
+        &mut self,
+        print_none: Option<impl FnOnce(&mut Self)>,
+        print_some: impl FnOnce(&mut Self, T),
+        x: Option<T>,
+    ) -> &mut Self {
+        match x {
+            None => {
+                if let Some(print_none) = print_none {
+                    print_none(self);
+                }
+            }
+            Some(x) => print_some(self, x),
+        }
         self
     }
 
@@ -817,6 +872,24 @@ v
     s1
      s0
      bla",
+        );
+    }
+
+    #[test]
+    fn test_print_iter() {
+        let mut doc: Doc = Doc::new();
+        doc.print_iter(
+            Some(|doc: &mut Doc| {
+                doc.atom(", ");
+            }),
+            |doc, x| {
+                doc.atom(x);
+            },
+            ["a", "b", "c"],
+        );
+        assert_eq!(
+            format!("{}", doc.display(&FormattingOptions::new())),
+            "a, b, c",
         );
     }
 }
