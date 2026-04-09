@@ -148,11 +148,7 @@ impl Default for FormattingOptions {
 
 type FmtFn<'a> = Arc<dyn Fn(&mut Formatter) -> fmt::Result + 'a>;
 
-type FmtFnSend<'a> = Arc<dyn Fn(&mut Formatter) -> fmt::Result + Send + 'a>;
-
-type FmtFnSync<'a> = Arc<dyn Fn(&mut Formatter) -> fmt::Result + Sync + 'a>;
-
-type FmtFnSendSync<'a> = Arc<dyn Fn(&mut Formatter) -> fmt::Result + Send + Sync + 'a>;
+type FmtFnSync<'a> = Arc<dyn Fn(&mut Formatter) -> fmt::Result + Send + Sync + 'a>;
 
 /// A sequence of formatting directives and content, representing a formatted document or a fragment of it.
 #[derive(Clone)]
@@ -164,14 +160,8 @@ pub struct Doc<'a, F: 'a = FmtFn<'a>> {
     _marker: PhantomData<&'a ()>,
 }
 
-/// [`Doc`] that implements [`Send`].
-pub type DocSend<'a> = Doc<'a, FmtFnSend<'a>>;
-
-/// [`Doc`] that implements [`Sync`].
-pub type DocSync<'a> = Doc<'a, FmtFnSync<'a>>;
-
 /// [`Doc`] that implements [`Send`] and [`Sync`].
-pub type DocSendSync<'a> = Doc<'a, FmtFnSendSync<'a>>;
+pub type DocSync<'a> = Doc<'a, FmtFnSync<'a>>;
 
 #[derive(Clone)]
 enum DocItem<'a, F: 'a> {
@@ -420,71 +410,7 @@ impl<'a> Doc<'a> {
 }
 
 /// Builder pattern methods.
-impl<'a> DocSend<'a> {
-    /// Appends indivisible content to the document, through a formatting closure.
-    ///
-    /// The content should not contain newlines.
-    ///
-    /// The formatting closure is called multiple times, to get the width of the content.
-    pub fn atom_fn(
-        &mut self,
-        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Send + 'a,
-    ) -> &mut Self {
-        let width = fmt_width::width_of(FmtFnWrapper::new(&fmt_fn));
-        self.atom_inner(Atom {
-            fmt_fn: Arc::new(fmt_fn),
-            width,
-        })
-    }
-
-    /// Appends indivisible content to the document, from a value implementing [`Display`].
-    ///
-    /// The content should not contain newlines.
-    ///
-    /// The value is formatted multiple times, to get the width of the content.
-    pub fn atom(&mut self, d: impl Display + Send + 'a) -> &mut Self {
-        let width = fmt_width::width_of(&d);
-        self.atom_inner(Atom {
-            fmt_fn: Arc::new(move |f| write!(f, "{}", d)),
-            width,
-        })
-    }
-}
-
-/// Builder pattern methods.
 impl<'a> DocSync<'a> {
-    /// Appends indivisible content to the document, through a formatting closure.
-    ///
-    /// The content should not contain newlines.
-    ///
-    /// The formatting closure is called multiple times, to get the width of the content.
-    pub fn atom_fn(
-        &mut self,
-        fmt_fn: impl Fn(&mut Formatter) -> fmt::Result + Sync + 'a,
-    ) -> &mut Self {
-        let width = fmt_width::width_of(FmtFnWrapper::new(&fmt_fn));
-        self.atom_inner(Atom {
-            fmt_fn: Arc::new(fmt_fn),
-            width,
-        })
-    }
-
-    /// Appends indivisible content to the document, from a value implementing [`Display`].
-    ///
-    /// The content should not contain newlines.
-    ///
-    /// The value is formatted multiple times, to get the width of the content.
-    pub fn atom(&mut self, d: impl Display + Sync + 'a) -> &mut Self {
-        let width = fmt_width::width_of(&d);
-        self.atom_inner(Atom {
-            fmt_fn: Arc::new(move |f| write!(f, "{}", d)),
-            width,
-        })
-    }
-}
-
-/// Builder pattern methods.
-impl<'a> DocSendSync<'a> {
     /// Appends indivisible content to the document, through a formatting closure.
     ///
     /// The content should not contain newlines.
@@ -907,5 +833,12 @@ v
             format!("{}", doc.display(&FormattingOptions::new())),
             "a, b, c",
         );
+    }
+
+    #[test]
+    fn ensure_send_sync() {
+        fn assert_send_sync(_: impl Send + Sync) {}
+
+        assert_send_sync(DocSync::new());
     }
 }
