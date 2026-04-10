@@ -467,13 +467,13 @@ fn quoted(s: impl AsRef<str>) -> impl Fn(&mut Formatter) -> fmt::Result {
         for c in s.as_ref().bytes() {
             match c {
                 b'"' => write!(f, r#"\""#)?,
-                b'\\' => write!(f, r#"\\"#)?,
-                b'\n' => write!(f, r#"\n"#)?,
-                b'\t' => write!(f, r#"\t"#)?,
-                b'\r' => write!(f, r#"\r"#)?,
-                b'\x08' => write!(f, r#"\b"#)?,
+                b'\\' => write!(f, r"\\")?,
+                b'\n' => write!(f, r"\n")?,
+                b'\t' => write!(f, r"\t")?,
+                b'\r' => write!(f, r"\r")?,
+                b'\x08' => write!(f, r"\b")?,
                 b' '..=b'~' => write!(f, "{}", c as char)?,
-                c => write!(f, r#"\{c:0<3}"#)?,
+                c => write!(f, r"\{c:0>3}")?,
             }
         }
         write!(f, r#"""#)
