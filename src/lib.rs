@@ -320,6 +320,14 @@ impl<'a, F: 'a> Doc<'a, F> {
         self
     }
 
+    /// Reflects `%t` in OCaml.
+    ///
+    /// Prints through a closure.
+    pub fn print_(&mut self, print: impl FnOnce(&mut Self)) -> &mut Self {
+        print(self);
+        self
+    }
+
     /// Prints an iterable collection, with an optional separator.
     pub fn print_iter<T>(
         &mut self,
