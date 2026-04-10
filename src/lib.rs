@@ -312,6 +312,14 @@ impl<'a, F: 'a> Doc<'a, F> {
         self
     }
 
+    /// Reflects `%a` in OCaml.
+    ///
+    /// Prints a value.
+    pub fn print<T>(&mut self, print: impl FnOnce(&mut Self, T), x: T) -> &mut Self {
+        print(self, x);
+        self
+    }
+
     /// Prints an iterable collection, with an optional separator.
     pub fn print_iter<T>(
         &mut self,
