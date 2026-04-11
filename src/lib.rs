@@ -604,7 +604,7 @@ impl<'a, 'b> Engine<'a, 'b> {
     fn fmt_spaces(&mut self, n: usize) -> fmt::Result {
         self.caret_pos += n;
         // self.just_newline = false;
-        write!(self.f, "{}", " ".repeat(n))
+        write!(self.f, "{:n$}", "")
     }
 
     fn fmt_newline(&mut self, indent: usize) -> fmt::Result {
@@ -612,7 +612,7 @@ impl<'a, 'b> Engine<'a, 'b> {
         self.caret_pos = indent;
         self.just_newline = true;
         self.prev_indent = indent;
-        write!(self.f, "\n{}", " ".repeat(indent))
+        write!(self.f, "\n{:indent$}", "")
     }
 }
 
