@@ -18,6 +18,7 @@ impl<'a> From<DocItem<'a, FmtFnSync<'a>>> for DocItem<'a, FmtFn<'a>> {
             DocItem::FormatBox(format_box) => DocItem::FormatBox(format_box.into()),
             DocItem::Atom(atom) => DocItem::Atom(atom.into()),
             DocItem::FormatBreak(format_break) => DocItem::FormatBreak(format_break),
+            DocItem::Newline => DocItem::Newline,
         }
     }
 }

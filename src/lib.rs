@@ -168,6 +168,7 @@ enum DocItem<'a, F: 'a> {
     FormatBox(FormatBox<'a, F>),
     Atom(Atom<F>),
     FormatBreak(FormatBreak),
+    Newline,
 }
 
 #[derive(Clone)]
@@ -298,6 +299,13 @@ impl<'a, F: 'a> Doc<'a, F> {
     /// Convenience method for `format_break(0, 0)`.
     pub fn cut(&mut self) -> &mut Self {
         self.format_break(0, 0)
+    }
+
+    /// Appends a newline to the document.
+    pub fn newline(&mut self) -> &mut Self {
+        self.add_segment_flat_width(0);
+        self.items.push(DocItem::Newline);
+        self
     }
 
     /// Extends the document with the items of another `Doc`.
@@ -463,6 +471,8 @@ impl<'a> DocSync<'a> {
         })
     }
 
+    /// Reflects `%S` in OCaml.
+    ///
     /// Appends a string to the document, quoted in OCaml style.
     pub fn quoted(&mut self, s: impl AsRef<str> + Send + Sync + 'a) -> &mut Self {
         self.atom_fn(quoted(s))
@@ -588,6 +598,7 @@ impl<'a, 'b> Engine<'a, 'b> {
             }
             DocItem::Atom(atom) => self.fmt_atom(atom),
             DocItem::FormatBreak(format_break) => fmt_format_break(self, format_break),
+            DocItem::Newline => fmt_newline(self, 0),
         })
     }
 
@@ -897,5 +908,19 @@ v
             format!("{}", doc.display(&FormattingOptions::new())),
             r#""Hell\"\\\n\t\r\b\240\146\141\133o""#,
         )
+    }
+
+    #[test]
+    fn test_newline() {
+        let mut doc: Doc = Doc::new();
+        doc.hvbox(2, |doc| {
+            doc.atom("a").newline().atom("b");
+        });
+        assert_eq!(
+            format!("{}", doc.display(&FormattingOptions::new())),
+            "\
+a
+  b",
+        );
     }
 }
