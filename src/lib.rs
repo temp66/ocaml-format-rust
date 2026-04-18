@@ -311,10 +311,11 @@ impl<'a, F: 'a> Doc<'a, F> {
     /// Extends the document with the items of another `Doc`.
     pub fn extend(&mut self, doc: impl Into<Self>) -> &mut Self {
         let doc = doc.into();
+
         self.flat_width += doc.flat_width;
         self.add_segment_flat_width(doc.head_segment_flat_width);
-        if doc.last_format_break_index.is_some() {
-            self.last_format_break_index = doc.last_format_break_index;
+        if let Some(index) = doc.last_format_break_index {
+            self.last_format_break_index = Some(self.items.len() + index);
         }
         self.items.extend(doc.items);
         self
